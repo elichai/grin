@@ -59,20 +59,19 @@ where
 		outputs.len(),
 	);
 
-	for output in outputs.iter() {
-		let (commit, proof, is_coinbase, height) = output;
+	for (commit, proof, is_coinbase, height) in outputs {
 		// attempt to unwind message from the RP and get a value
 		// will fail if it's not ours
-		let info = proof::rewind(wallet.keychain(), *commit, None, *proof)?;
+		let info = proof::rewind(wallet.keychain(), commit, None, proof)?;
 
 		if !info.success {
 			continue;
 		}
 
-		let lock_height = if *is_coinbase {
-			*height + global::coinbase_maturity()
+		let lock_height = if is_coinbase {
+			height + global::coinbase_maturity()
 		} else {
-			*height
+			height
 		};
 
 		// TODO: Output paths are always going to be length 3 for now, but easy enough to grind
@@ -85,13 +84,13 @@ where
 		);
 
 		wallet_outputs.push(OutputResult {
-			commit: *commit,
+			commit,
 			key_id: key_id.clone(),
 			n_child: key_id.to_path().last_path_index(),
 			value: info.value,
-			height: *height,
-			lock_height: lock_height,
-			is_coinbase: *is_coinbase,
+			height,
+			lock_height,
+			is_coinbase,
 			blinding: info.blinding,
 		});
 	}
@@ -147,9 +146,10 @@ where
 	}
 
 	let log_id = batch.next_tx_log_id(&parent_key_id)?;
-	let entry_type = match output.is_coinbase {
-		true => TxLogEntryType::ConfirmedCoinbase,
-		false => TxLogEntryType::TxReceived,
+	let entry_type = if output.is_coinbase {
+		TxLogEntryType::ConfirmedCoinbase
+	} else {
+		TxLogEntryType::TxReceived
 	};
 
 	let mut t = TxLogEntry::new(parent_key_id.clone(), entry_type, log_id);
@@ -171,7 +171,7 @@ where
 		tx_log_entry: Some(log_id),
 	});
 
-	let max_child_index = found_parents.get(&parent_key_id).unwrap().clone();
+	let max_child_index = *found_parents.get(&parent_key_id).unwrap();
 	if output.n_child >= max_child_index {
 		found_parents.insert(parent_key_id.clone(), output.n_child);
 	}
@@ -189,13 +189,9 @@ where
 {
 	let parent_key_id = output.key_id.parent_path();
 	let updated_tx_entry = if output.tx_log_entry.is_some() {
-		let entries = updater::retrieve_txs(
-			wallet,
-			output.tx_log_entry.clone(),
-			None,
-			Some(&parent_key_id),
-		)?;
-		if entries.len() > 0 {
+		let entries =
+			updater::retrieve_txs(wallet, output.tx_log_entry, None, Some(&parent_key_id))?;
+		if !entries.is_empty() {
 			let mut entry = entries[0].clone();
 			match entry.tx_type {
 				TxLogEntryType::TxSent => entry.tx_type = TxLogEntryType::TxSentCancelled,
@@ -235,10 +231,7 @@ where
 	);
 
 	// Now, get all outputs owned by this wallet (regardless of account)
-	let wallet_outputs = {
-		let res = updater::retrieve_outputs(&mut *wallet, true, None, None)?;
-		res
-	};
+	let wallet_outputs = updater::retrieve_outputs(&mut *wallet, true, None, None)?;
 
 	// check all definitive outputs exist in the wallet outputs
 	let mut missing_outs = vec![];
@@ -363,7 +356,7 @@ where
 		}
 		let label = format!("{}_{}", label_base, index);
 		keys::set_acct_path(wallet, &label, path)?;
-		index = index + 1;
+		index += 1;
 		{
 			let mut batch = wallet.batch()?;
 			batch.save_child_index(path, max_child_index + 1)?;

@@ -54,21 +54,21 @@ pub fn outputs(
 	]);
 
 	for (out, commit) in outputs {
-		let commit = format!("{}", util::to_hex(commit.as_ref().to_vec()));
-		let height = format!("{}", out.height);
-		let lock_height = format!("{}", out.lock_height);
-		let is_coinbase = format!("{}", out.is_coinbase);
+		let commit = util::to_hex(commit.as_ref().to_vec()).to_string();
+		let height = out.height.to_string();
+		let lock_height = out.lock_height.to_string();
+		let is_coinbase = out.is_coinbase.to_string();
 
 		// Mark unconfirmed coinbase outputs as "Mining" instead of "Unconfirmed"
 		let status = match out.status {
 			OutputStatus::Unconfirmed if out.is_coinbase => "Mining".to_string(),
-			_ => format!("{}", out.status),
+			_ => out.status.to_string(),
 		};
 
-		let num_confirmations = format!("{}", out.num_confirmations(cur_height));
-		let value = format!("{}", core::amount_to_hr_string(out.value, false));
+		let num_confirmations = out.num_confirmations(cur_height).to_string();
+		let value = core::amount_to_hr_string(out.value, false).to_string();
 		let tx = match out.tx_log_entry {
-			None => "".to_owned(),
+			None => String::new(),
 			Some(t) => t.to_string(),
 		};
 
@@ -166,8 +166,8 @@ pub fn txs(
 		let amount_debited_str = core::amount_to_hr_string(t.amount_debited, true);
 		let amount_credited_str = core::amount_to_hr_string(t.amount_credited, true);
 		let fee = match t.fee {
-			Some(f) => format!("{}", core::amount_to_hr_string(f, true)),
-			None => "None".to_owned(),
+			Some(f) => core::amount_to_hr_string(f, true).to_string(),
+			None => "None".to_string(),
 		};
 		let net_diff = if t.amount_credited >= t.amount_debited {
 			core::amount_to_hr_string(t.amount_credited - t.amount_debited, true)
@@ -178,8 +178,8 @@ pub fn txs(
 			)
 		};
 		let tx_data = match t.stored_tx {
-			Some(t) => format!("{}", t),
-			None => "None".to_owned(),
+			Some(t) => t.to_string(),
+			None => "None".to_string(),
 		};
 		if dark_background_color_scheme {
 			table.add_row(row![
@@ -197,40 +197,38 @@ pub fn txs(
 				bFY->net_diff,
 				bFb->tx_data,
 			]);
+		} else if t.confirmed {
+			table.add_row(row![
+				bFD->id,
+				bFb->entry_type,
+				bFD->slate_id,
+				bFB->creation_ts,
+				bFg->confirmed,
+				bFB->confirmation_ts,
+				bFD->num_inputs,
+				bFD->num_outputs,
+				bFG->amount_credited_str,
+				bFD->amount_debited_str,
+				bFD->fee,
+				bFG->net_diff,
+				bFB->tx_data,
+			]);
 		} else {
-			if t.confirmed {
-				table.add_row(row![
-					bFD->id,
-					bFb->entry_type,
-					bFD->slate_id,
-					bFB->creation_ts,
-					bFg->confirmed,
-					bFB->confirmation_ts,
-					bFD->num_inputs,
-					bFD->num_outputs,
-					bFG->amount_credited_str,
-					bFD->amount_debited_str,
-					bFD->fee,
-					bFG->net_diff,
-					bFB->tx_data,
-				]);
-			} else {
-				table.add_row(row![
-					bFD->id,
-					bFb->entry_type,
-					bFD->slate_id,
-					bFB->creation_ts,
-					bFR->confirmed,
-					bFB->confirmation_ts,
-					bFD->num_inputs,
-					bFD->num_outputs,
-					bFG->amount_credited_str,
-					bFD->amount_debited_str,
-					bFD->fee,
-					bFG->net_diff,
-					bFB->tx_data,
-				]);
-			}
+			table.add_row(row![
+				bFD->id,
+				bFb->entry_type,
+				bFD->slate_id,
+				bFB->creation_ts,
+				bFR->confirmed,
+				bFB->confirmation_ts,
+				bFD->num_inputs,
+				bFD->num_outputs,
+				bFG->amount_credited_str,
+				bFD->amount_debited_str,
+				bFD->fee,
+				bFG->net_diff,
+				bFB->tx_data,
+			]);
 		}
 	}
 

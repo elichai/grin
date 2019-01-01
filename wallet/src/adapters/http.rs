@@ -45,12 +45,12 @@ impl WalletCommAdapter for HTTPWalletCommAdapter {
 			error!("{}", err_str,);
 			Err(ErrorKind::Uri)?
 		}
-		let url = format!("{}/v1/wallet/foreign/receive_tx", dest);
+		let url = dest.to_owned() + "/v1/wallet/foreign/receive_tx";
 		debug!("Posting transaction slate to {}", url);
 
-		let res = api::client::post(url.as_str(), None, slate).context(
-			ErrorKind::ClientCallback("Posting transaction slate (is recipient listening?)"),
-		)?;
+		let res = api::client::post(&url, None, slate).context(ErrorKind::ClientCallback(
+			"Posting transaction slate (is recipient listening?)",
+		))?;
 		Ok(res)
 	}
 
@@ -70,14 +70,15 @@ impl WalletCommAdapter for HTTPWalletCommAdapter {
 		account: &str,
 		node_api_secret: Option<String>,
 	) -> Result<(), Error> {
-		let node_client = HTTPNodeClient::new(&config.check_node_api_http_addr, node_api_secret);
-		let wallet = instantiate_wallet(config.clone(), node_client, passphrase, account)
+		let node_client =
+			HTTPNodeClient::new(config.check_node_api_http_addr.clone(), node_api_secret);
+		let wallet = instantiate_wallet(config, node_client, passphrase, account)
 			.context(ErrorKind::WalletSeedDecryption)?;
-		let listen_addr = params.get("api_listen_addr").unwrap();
+		let listen_addr = &params["api_listen_addr"];
 		let tls_conf = match params.get("certificate") {
 			Some(s) => Some(api::TLSConfig::new(
 				s.to_owned(),
-				params.get("private_key").unwrap().to_owned(),
+				params["private_key"].to_owned(),
 			)),
 			None => None,
 		};

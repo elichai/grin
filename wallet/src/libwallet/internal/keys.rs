@@ -31,7 +31,7 @@ where
 /// Retrieve an existing key from a wallet
 pub fn retrieve_existing_key<T: ?Sized, C, K>(
 	wallet: &T,
-	key_id: Identifier,
+	key_id: &Identifier,
 ) -> Result<(Identifier, u32), Error>
 where
 	T: WalletBackend<C, K>,
@@ -62,7 +62,7 @@ where
 	K: Keychain,
 {
 	let label = label.to_owned();
-	if let Some(_) = wallet.acct_path_iter().find(|l| l.label == label) {
+	if wallet.acct_path_iter().find(|l| l.label == label).is_some() {
 		return Err(ErrorKind::AccountLabelAlreadyExists(label.clone()).into());
 	}
 

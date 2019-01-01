@@ -68,7 +68,7 @@ where
 	slate.height = current_height;
 	slate.lock_height = lock_height;
 	slate.fee = fee;
-	let slate_id = slate.id.clone();
+	let slate_id = slate.id;
 
 	let keychain = wallet.keychain().clone();
 
@@ -109,21 +109,21 @@ where
 			for id in lock_inputs {
 				let mut coin = batch.get(&id).unwrap();
 				coin.tx_log_entry = Some(log_id);
-				amount_debited = amount_debited + coin.value;
+				amount_debited += coin.value;
 				batch.lock_output(&mut coin)?;
 			}
 
 			t.amount_debited = amount_debited;
 
 			// write the output representing our change
-			for (change_amount, id) in &change_amounts_derivations {
+			for (change_amount, id) in change_amounts_derivations {
 				t.num_outputs += 1;
 				t.amount_credited += change_amount;
 				batch.save(OutputData {
 					root_key_id: parent_key_id.clone(),
 					key_id: id.clone(),
 					n_child: id.to_path().last_path_index(),
-					value: change_amount.clone(),
+					value: change_amount,
 					status: OutputStatus::Unconfirmed,
 					height: current_height,
 					lock_height: 0,
@@ -171,7 +171,7 @@ where
 	let amount = slate.amount;
 	let height = slate.height;
 
-	let slate_id = slate.id.clone();
+	let slate_id = slate.id;
 	let blinding =
 		slate.add_transaction_elements(&keychain, vec![build::output(amount, key_id.clone())])?;
 
@@ -332,7 +332,7 @@ where
 
 /// Selects inputs and change for a transaction
 pub fn inputs_and_change<T: ?Sized, C, K>(
-	coins: &Vec<OutputData>,
+	coins: &[OutputData],
 	wallet: &mut T,
 	amount: u64,
 	fee: u64,
@@ -441,7 +441,7 @@ where
 	// wants to send. So the wallet considers max_outputs more of a soft limit.
 	if eligible.len() > max_outputs {
 		for window in eligible.windows(max_outputs) {
-			let windowed_eligibles = window.iter().cloned().collect::<Vec<_>>();
+			let windowed_eligibles = window.to_vec();
 			if let Some(outputs) = select_from(amount, select_all, windowed_eligibles) {
 				return (max_available, outputs);
 			}
@@ -456,10 +456,8 @@ where
 			);
 			return (max_available, outputs);
 		}
-	} else {
-		if let Some(outputs) = select_from(amount, select_all, eligible.clone()) {
-			return (max_available, outputs);
-		}
+	} else if let Some(outputs) = select_from(amount, select_all, eligible.clone()) {
+		return (max_available, outputs);
 	}
 
 	// we failed to find a suitable set of outputs to spend,
@@ -476,20 +474,19 @@ fn select_from(amount: u64, select_all: bool, outputs: Vec<OutputData>) -> Optio
 	let total = outputs.iter().fold(0, |acc, x| acc + x.value);
 	if total >= amount {
 		if select_all {
-			return Some(outputs.iter().cloned().collect());
+			Some(outputs)
 		} else {
 			let mut selected_amount = 0;
-			return Some(
+			Some(
 				outputs
-					.iter()
+					.into_iter()
 					.take_while(|out| {
 						let res = selected_amount < amount;
 						selected_amount += out.value;
 						res
 					})
-					.cloned()
 					.collect(),
-			);
+			)
 		}
 	} else {
 		None

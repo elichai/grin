@@ -50,7 +50,7 @@ fn get_output_local(chain: &chain::Chain, commit: &pedersen::Commitment) -> Opti
 	];
 
 	for x in outputs.iter() {
-		if let Ok(_) = chain.is_unspent(&x) {
+		if chain.is_unspent(&x).is_ok() {
 			let block_height = chain.get_header_for_output(&x).unwrap().height;
 			return Some(api::Output::new(&commit, block_height));
 		}
@@ -60,7 +60,7 @@ fn get_output_local(chain: &chain::Chain, commit: &pedersen::Commitment) -> Opti
 
 /// get output listing traversing pmmr from local
 fn get_outputs_by_pmmr_index_local(
-	chain: Arc<chain::Chain>,
+	chain: &Arc<chain::Chain>,
 	start_index: u64,
 	max: u64,
 ) -> api::OutputListing {
@@ -128,7 +128,7 @@ where
 		height: prev.height + 1,
 	};
 	// build coinbase (via api) and add block
-	controller::foreign_single_use(wallet.clone(), |api| {
+	controller::foreign_single_use(wallet, |api| {
 		let coinbase_tx = api.build_coinbase(&block_fees)?;
 		add_block_with_reward(chain, txs, coinbase_tx.clone());
 		Ok(())
@@ -139,7 +139,7 @@ where
 /// Award a blocks to a wallet directly
 pub fn award_blocks_to_wallet<C, K>(
 	chain: &Chain,
-	wallet: Arc<Mutex<dyn WalletInst<C, K>>>,
+	wallet: &Arc<Mutex<dyn WalletInst<C, K>>>,
 	number: usize,
 ) -> Result<(), libwallet::Error>
 where

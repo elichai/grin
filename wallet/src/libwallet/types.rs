@@ -111,10 +111,10 @@ where
 	fn batch<'a>(&'a mut self) -> Result<Box<dyn WalletOutputBatch<K> + 'a>, Error>;
 
 	/// Next child ID when we want to create a new output, based on current parent
-	fn next_child<'a>(&mut self) -> Result<Identifier, Error>;
+	fn next_child(&mut self) -> Result<Identifier, Error>;
 
 	/// last verified height of outputs directly descending from the given parent key
-	fn last_confirmed_height<'a>(&mut self) -> Result<u64, Error>;
+	fn last_confirmed_height(&mut self) -> Result<u64, Error>;
 
 	/// Attempt to restore the contents of a wallet from seed
 	fn restore(&mut self) -> Result<(), Error>;
@@ -286,9 +286,7 @@ impl OutputData {
 		if self.height > current_height {
 			return 0;
 		}
-		if self.status == OutputStatus::Unconfirmed {
-			0
-		} else if self.height == 0 {
+		if self.status == OutputStatus::Unconfirmed || self.height == 0 {
 			0
 		} else {
 			// if an output has height n and we are at block n
@@ -301,27 +299,26 @@ impl OutputData {
 	/// confirmations
 	pub fn eligible_to_spend(&self, current_height: u64, minimum_confirmations: u64) -> bool {
 		if [OutputStatus::Spent, OutputStatus::Locked].contains(&self.status) {
-			return false;
+			false
 		} else if self.status == OutputStatus::Unconfirmed && self.is_coinbase {
-			return false;
+			false
 		} else if self.lock_height > current_height {
-			return false;
+			false
 		} else if self.status == OutputStatus::Unspent
 			&& self.num_confirmations(current_height) >= minimum_confirmations
 		{
-			return true;
+			true
 		} else if self.status == OutputStatus::Unconfirmed && minimum_confirmations == 0 {
-			return true;
+			true
 		} else {
-			return false;
+			false
 		}
 	}
 
 	/// Marks this output as unspent if it was previously unconfirmed
 	pub fn mark_unspent(&mut self) {
-		match self.status {
-			OutputStatus::Unconfirmed => self.status = OutputStatus::Unspent,
-			_ => (),
+		if let OutputStatus::Unconfirmed = self.status {
+			self.status = OutputStatus::Unspent
 		}
 	}
 
@@ -415,7 +412,7 @@ impl Context {
 
 	/// Returns private key, private nonce
 	pub fn get_private_keys(&self) -> (SecretKey, SecretKey) {
-		(self.sec_key.clone(), self.sec_nonce.clone())
+		(self.sec_key, self.sec_nonce)
 	}
 
 	/// Returns public key, public nonce
@@ -641,10 +638,13 @@ impl TxLogEntry {
 	}
 
 	/// Given a vec of TX log entries, return credited + debited sums
-	pub fn sum_confirmed(txs: &Vec<TxLogEntry>) -> (u64, u64) {
-		txs.iter().fold((0, 0), |acc, tx| match tx.confirmed {
-			true => (acc.0 + tx.amount_credited, acc.1 + tx.amount_debited),
-			false => acc,
+	pub fn sum_confirmed(txs: &[TxLogEntry]) -> (u64, u64) {
+		txs.iter().fold((0, 0), |acc, tx| {
+			if tx.confirmed {
+				(acc.0 + tx.amount_credited, acc.1 + tx.amount_debited)
+			} else {
+				acc
+			}
 		})
 	}
 

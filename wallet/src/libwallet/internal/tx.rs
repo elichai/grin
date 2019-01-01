@@ -41,7 +41,7 @@ where
 		selection::build_recipient_output_with_slate(wallet, slate, parent_key_id.clone())?;
 
 	// fill public keys
-	let _ = slate.fill_round_1(
+	slate.fill_round_1(
 		wallet.keychain(),
 		&mut context.sec_key,
 		&context.sec_nonce,
@@ -50,7 +50,7 @@ where
 	)?;
 
 	// perform partial sig
-	let _ = slate.fill_round_2(wallet.keychain(), &context.sec_key, &context.sec_nonce, 1)?;
+	slate.fill_round_2(wallet.keychain(), &context.sec_key, &context.sec_nonce, 1)?;
 
 	// Save output in wallet
 	let _ = receiver_create_fn(wallet);
@@ -112,7 +112,7 @@ where
 	// Generate a kernel offset and subtract from our context's secret key. Store
 	// the offset in the slate's transaction kernel, and adds our public key
 	// information to the slate
-	let _ = slate.fill_round_1(
+	slate.fill_round_1(
 		wallet.keychain(),
 		&mut context.sec_key,
 		&context.sec_nonce,
@@ -134,7 +134,7 @@ where
 	C: NodeClient,
 	K: Keychain,
 {
-	let _ = slate.fill_round_2(wallet.keychain(), &context.sec_key, &context.sec_nonce, 0)?;
+	slate.fill_round_2(wallet.keychain(), &context.sec_key, &context.sec_nonce, 0)?;
 	// Final transaction can be built by anyone at this stage
 	let res = slate.finalize(wallet.keychain());
 	if let Err(e) = res {
@@ -169,7 +169,7 @@ where
 	if tx.tx_type != TxLogEntryType::TxSent && tx.tx_type != TxLogEntryType::TxReceived {
 		return Err(ErrorKind::TransactionNotCancellable(tx_id_string))?;
 	}
-	if tx.confirmed == true {
+	if tx.confirmed {
 		return Err(ErrorKind::TransactionNotCancellable(tx_id_string))?;
 	}
 	// get outputs associated with tx

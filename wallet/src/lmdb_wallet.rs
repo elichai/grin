@@ -41,8 +41,8 @@ use crate::util::secp::constants::SECRET_KEY_SIZE;
 use crate::util::secp::pedersen;
 use crate::util::ZeroingString;
 
-pub const DB_DIR: &'static str = "db";
-pub const TX_SAVE_DIR: &'static str = "saved_txs";
+pub const DB_DIR: &str = "db";
+pub const TX_SAVE_DIR: &str = "saved_txs";
 
 const COMMITMENT_PREFIX: u8 = 'C' as u8;
 const OUTPUT_PREFIX: u8 = 'o' as u8;
@@ -61,7 +61,7 @@ impl From<store::Error> for Error {
 
 /// test to see if database files exist in the current directory. If so,
 /// use a DB backend for all operations
-pub fn wallet_db_exists(config: WalletConfig) -> bool {
+pub fn wallet_db_exists(config: &WalletConfig) -> bool {
 	let db_path = path::Path::new(&config.data_file_dir).join(DB_DIR);
 	db_path.exists()
 }
@@ -82,7 +82,7 @@ where
 	let mut hasher = Blake2b::new(SECRET_KEY_SIZE);
 	hasher.update(&root_key.0[..]);
 	hasher.update(&slate_id[..]);
-	hasher.update(&"blind".as_bytes()[..]);
+	hasher.update(b"blind");
 	let blind_xor_key = hasher.finalize();
 	let mut ret_blind = [0; SECRET_KEY_SIZE];
 	ret_blind.copy_from_slice(&blind_xor_key.as_bytes()[0..SECRET_KEY_SIZE]);
@@ -91,7 +91,7 @@ where
 	let mut hasher = Blake2b::new(SECRET_KEY_SIZE);
 	hasher.update(&root_key.0[..]);
 	hasher.update(&slate_id[..]);
-	hasher.update(&"nonce".as_bytes()[..]);
+	hasher.update(b"nonce");
 	let nonce_xor_key = hasher.finalize();
 	let mut ret_nonce = [0; SECRET_KEY_SIZE];
 	ret_nonce.copy_from_slice(&nonce_xor_key.as_bytes()[0..SECRET_KEY_SIZE]);
@@ -144,7 +144,7 @@ impl<C, K> LMDBBackend<C, K> {
 
 		let res = LMDBBackend {
 			db: store,
-			config: config.clone(),
+			config,
 			passphrase: ZeroingString::from(passphrase),
 			keychain: None,
 			parent_key_id: LMDBBackend::<C, K>::default_path(),
@@ -162,7 +162,7 @@ impl<C, K> LMDBBackend<C, K> {
 
 	/// Just test to see if database files exist in the current directory. If
 	/// so, use a DB backend for all operations
-	pub fn exists(config: WalletConfig) -> bool {
+	pub fn exists(config: &WalletConfig) -> bool {
 		let db_path = path::Path::new(&config.data_file_dir).join(DB_DIR);
 		db_path.exists()
 	}
@@ -277,8 +277,8 @@ where
 		)?;
 
 		for i in 0..SECRET_KEY_SIZE {
-			ctx.sec_key.0[i] = ctx.sec_key.0[i] ^ blind_xor_key[i];
-			ctx.sec_nonce.0[i] = ctx.sec_nonce.0[i] ^ nonce_xor_key[i];
+			ctx.sec_key.0[i] ^= blind_xor_key[i];
+			ctx.sec_nonce.0[i] ^= nonce_xor_key[i];
 		}
 
 		Ok(ctx)
@@ -332,7 +332,7 @@ where
 		}))
 	}
 
-	fn next_child<'a>(&mut self) -> Result<Identifier, Error> {
+	fn next_child(&mut self) -> Result<Identifier, Error> {
 		let parent_key_id = self.parent_key_id.clone();
 		let mut deriv_idx = {
 			let batch = self.db.batch()?;
@@ -343,16 +343,16 @@ where
 			}
 		};
 		let mut return_path = self.parent_key_id.to_path();
-		return_path.depth = return_path.depth + 1;
+		return_path.depth += 1;
 		return_path.path[return_path.depth as usize - 1] = ChildNumber::from(deriv_idx);
-		deriv_idx = deriv_idx + 1;
+		deriv_idx += 1;
 		let mut batch = self.batch()?;
 		batch.save_child_index(&parent_key_id, deriv_idx)?;
 		batch.commit()?;
 		Ok(Identifier::from_path(&return_path))
 	}
 
-	fn last_confirmed_height<'a>(&mut self) -> Result<u64, Error> {
+	fn last_confirmed_height(&mut self) -> Result<u64, Error> {
 		let batch = self.db.batch()?;
 		let height_key = to_key(
 			CONFIRMED_HEIGHT_PREFIX,
@@ -557,8 +557,8 @@ where
 
 		let mut s_ctx = ctx.clone();
 		for i in 0..SECRET_KEY_SIZE {
-			s_ctx.sec_key.0[i] = s_ctx.sec_key.0[i] ^ blind_xor_key[i];
-			s_ctx.sec_nonce.0[i] = s_ctx.sec_nonce.0[i] ^ nonce_xor_key[i];
+			s_ctx.sec_key.0[i] ^= blind_xor_key[i];
+			s_ctx.sec_nonce.0[i] ^= nonce_xor_key[i];
 		}
 
 		self.db

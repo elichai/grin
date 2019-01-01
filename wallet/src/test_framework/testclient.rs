@@ -114,7 +114,7 @@ where
 		)
 		.unwrap();
 		let (tx, rx) = channel();
-		let retval = WalletProxy {
+		WalletProxy {
 			chain_dir: chain_dir.to_owned(),
 			chain: Arc::new(c),
 			tx: tx,
@@ -123,8 +123,7 @@ where
 			running: Arc::new(AtomicBool::new(false)),
 			phantom_c: PhantomData,
 			phantom_k: PhantomData,
-		};
-		retval
+		}
 	}
 
 	/// Add wallet with a given "address"
@@ -155,7 +154,7 @@ where
 				_ => panic!("Unknown Wallet Proxy Message"),
 			};
 
-			self.respond(resp);
+			self.respond(&resp);
 			if !self.running.load(Ordering::Relaxed) {
 				return Ok(());
 			}
@@ -163,7 +162,7 @@ where
 	}
 
 	/// Return a message to a given wallet client
-	fn respond(&mut self, m: WalletProxyMessage) {
+	fn respond(&mut self, m: &WalletProxyMessage) {
 		if let Some(s) = self.wallets.get_mut(&m.dest) {
 			if let Err(e) = s.0.send(m.clone()) {
 				panic!("Error sending response from proxy: {:?}, {}", m, e);
@@ -204,7 +203,7 @@ where
 		m: WalletProxyMessage,
 	) -> Result<WalletProxyMessage, libwallet::Error> {
 		let dest_wallet = self.wallets.get_mut(&m.dest);
-		if let None = dest_wallet {
+		if dest_wallet.is_none() {
 			panic!("Unknown wallet destination for send_tx_slate: {:?}", m);
 		}
 		let w = dest_wallet.unwrap().1.clone();
@@ -239,12 +238,12 @@ where
 		&mut self,
 		m: WalletProxyMessage,
 	) -> Result<WalletProxyMessage, libwallet::Error> {
-		let split = m.body.split(",");
+		let split = m.body.split(',');
 		//let mut api_outputs: HashMap<pedersen::Commitment, String> = HashMap::new();
 		let mut outputs: Vec<api::Output> = vec![];
 		for o in split {
 			let o_str = String::from(o);
-			if o_str.len() == 0 {
+			if o_str.is_empty() {
 				continue;
 			}
 			let c = util::from_hex(o_str).unwrap();
@@ -267,10 +266,10 @@ where
 		&mut self,
 		m: WalletProxyMessage,
 	) -> Result<WalletProxyMessage, libwallet::Error> {
-		let split = m.body.split(",").collect::<Vec<&str>>();
+		let split = m.body.split(',').collect::<Vec<&str>>();
 		let start_index = split[0].parse::<u64>().unwrap();
 		let max = split[1].parse::<u64>().unwrap();
-		let ol = super::get_outputs_by_pmmr_index_local(self.chain.clone(), start_index, max);
+		let ol = super::get_outputs_by_pmmr_index_local(&self.chain, start_index, max);
 		Ok(WalletProxyMessage {
 			sender_id: "node".to_owned(),
 			dest: m.sender_id,
@@ -445,7 +444,7 @@ impl NodeClient for LocalWalletClient {
 	) -> Result<HashMap<pedersen::Commitment, (String, u64)>, libwallet::Error> {
 		let query_params: Vec<String> = wallet_outputs
 			.iter()
-			.map(|commit| format!("{}", util::to_hex(commit.as_ref().to_vec())))
+			.map(|commit| util::to_hex(commit.as_ref().to_vec()))
 			.collect();
 		let query_str = query_params.join(",");
 		let m = WalletProxyMessage {

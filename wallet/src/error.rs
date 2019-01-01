@@ -117,13 +117,7 @@ impl Fail for Error {
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let show_bt = match env::var("RUST_BACKTRACE") {
-			Ok(r) => {
-				if r == "1" {
-					true
-				} else {
-					false
-				}
-			}
+			Ok(r) => r == "1",
 			Err(_) => false,
 		};
 		let backtrace = match self.backtrace() {
@@ -165,7 +159,7 @@ impl From<ErrorKind> for Error {
 
 impl From<Context<ErrorKind>> for Error {
 	fn from(inner: Context<ErrorKind>) -> Error {
-		Error { inner: inner }
+		Error { inner }
 	}
 }
 

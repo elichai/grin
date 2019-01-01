@@ -53,15 +53,15 @@ pub struct InitArgs {
 	pub config: WalletConfig,
 }
 
-pub fn init(g_args: &GlobalArgs, args: InitArgs) -> Result<(), Error> {
+pub fn init(g_args: GlobalArgs, args: InitArgs) -> Result<(), Error> {
 	WalletSeed::init_file(&args.config, args.list_length, &args.password)?;
 	info!("Wallet seed file created");
 	let client_n = HTTPNodeClient::new(
-		&args.config.check_node_api_http_addr,
-		g_args.node_api_secret.clone(),
+		args.config.check_node_api_http_addr.clone(),
+		g_args.node_api_secret,
 	);
 	let _: LMDBBackend<HTTPNodeClient, keychain::ExtKeychain> =
-		LMDBBackend::new(args.config.clone(), &args.password, client_n)?;
+		LMDBBackend::new(args.config, &args.password, client_n)?;
 	info!("Wallet database backend created");
 	Ok(())
 }
@@ -72,7 +72,7 @@ pub struct RecoverArgs {
 	pub passphrase: String,
 }
 
-pub fn recover(config: &WalletConfig, args: RecoverArgs) -> Result<(), Error> {
+pub fn recover(config: &WalletConfig, args: &RecoverArgs) -> Result<(), Error> {
 	if args.recovery_phrase.is_none() {
 		let res = WalletSeed::from_file(config, &args.passphrase);
 		if let Err(e) = res {
@@ -198,7 +198,7 @@ pub struct SendArgs {
 
 pub fn send(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
-	args: SendArgs,
+	args: &SendArgs,
 ) -> Result<(), Error> {
 	controller::owner_single_use(wallet.clone(), |api| {
 		let result = api.initiate_tx(
@@ -277,7 +277,7 @@ pub struct ReceiveArgs {
 pub fn receive(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 	g_args: &GlobalArgs,
-	args: ReceiveArgs,
+	args: &ReceiveArgs,
 ) -> Result<(), Error> {
 	let adapter = FileWalletCommAdapter::new();
 	let mut slate = adapter.receive_tx_async(&args.input)?;
@@ -289,7 +289,7 @@ pub fn receive(
 		api.receive_tx(&mut slate, Some(&g_args.account), args.message.clone())?;
 		Ok(())
 	})?;
-	let send_tx = format!("{}.response", args.input);
+	let send_tx = args.input.to_string() + ".response";
 	adapter.send_tx_async(&send_tx, &slate)?;
 	info!(
 		"Response file {}.response generated, sending it back to the transaction originator.",
@@ -306,16 +306,16 @@ pub struct FinalizeArgs {
 
 pub fn finalize(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
-	args: FinalizeArgs,
+	args: &FinalizeArgs,
 ) -> Result<(), Error> {
 	let adapter = FileWalletCommAdapter::new();
 	let mut slate = adapter.receive_tx_async(&args.input)?;
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		if let Err(e) = api.verify_slate_messages(&slate) {
 			error!("Error validating participant messages: {}", e);
 			return Err(e);
 		}
-		let _ = api.finalize_tx(&mut slate).expect("Finalize failed");
+		api.finalize_tx(&mut slate).expect("Finalize failed");
 
 		let result = api.post_tx(&slate.tx, args.fluff);
 		match result {
@@ -340,10 +340,10 @@ pub struct InfoArgs {
 pub fn info(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 	g_args: &GlobalArgs,
-	args: InfoArgs,
+	args: &InfoArgs,
 	dark_scheme: bool,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let (validated, wallet_info) =
 			api.retrieve_summary_info(true, args.minimum_confirmations)?;
 		display::info(&g_args.account, &wallet_info, validated, dark_scheme);
@@ -357,7 +357,7 @@ pub fn outputs(
 	g_args: &GlobalArgs,
 	dark_scheme: bool,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let (height, _) = api.node_height()?;
 		let (validated, outputs) = api.retrieve_outputs(g_args.show_spent, true, None)?;
 		display::outputs(&g_args.account, height, validated, outputs, dark_scheme)?;
@@ -374,13 +374,13 @@ pub struct TxsArgs {
 pub fn txs(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 	g_args: &GlobalArgs,
-	args: TxsArgs,
+	args: &TxsArgs,
 	dark_scheme: bool,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let (height, _) = api.node_height()?;
 		let (validated, txs) = api.retrieve_txs(true, args.id, None)?;
-		let include_status = !args.id.is_some();
+		let include_status = args.id.is_none();
 		display::txs(
 			&g_args.account,
 			height,
@@ -411,7 +411,7 @@ pub fn repost(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 	args: RepostArgs,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let (_, txs) = api.retrieve_txs(true, Some(args.id), None)?;
 		let stored_tx = api.get_stored_tx(&txs[0])?;
 		if stored_tx.is_none() {
@@ -432,14 +432,14 @@ pub fn repost(
 				}
 				api.post_tx(&stored_tx.unwrap(), args.fluff)?;
 				info!("Reposted transaction at {}", args.id);
-				return Ok(());
+				Ok(())
 			}
 			Some(f) => {
 				let mut tx_file = File::create(f.clone())?;
 				tx_file.write_all(json::to_string(&stored_tx).unwrap().as_bytes())?;
 				tx_file.sync_all()?;
 				info!("Dumped transaction data for tx {} to {}", args.id, f);
-				return Ok(());
+				Ok(())
 			}
 		}
 	})?;
@@ -455,9 +455,9 @@ pub struct CancelArgs {
 
 pub fn cancel(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
-	args: CancelArgs,
+	args: &CancelArgs,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let result = api.cancel_tx(args.tx_id, args.tx_slate_id);
 		match result {
 			Ok(_) => {
@@ -476,7 +476,7 @@ pub fn cancel(
 pub fn restore(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let result = api.restore();
 		match result {
 			Ok(_) => {
@@ -496,7 +496,7 @@ pub fn restore(
 pub fn check_repair(
 	wallet: Arc<Mutex<WalletInst<impl NodeClient + 'static, keychain::ExtKeychain>>>,
 ) -> Result<(), Error> {
-	controller::owner_single_use(wallet.clone(), |api| {
+	controller::owner_single_use(wallet, |api| {
 		let result = api.check_repair();
 		match result {
 			Ok(_) => {

@@ -346,10 +346,11 @@ where
 		w.open_with_credentials()?;
 		let parent_key_id = w.parent_key_id();
 
-		let mut validated = false;
-		if refresh_from_node {
-			validated = self.update_outputs(&mut w);
-		}
+		let validated = if refresh_from_node {
+			self.update_outputs(&mut w)
+		} else {
+			false
+		};
 
 		let res = Ok((
 			validated,
@@ -424,10 +425,11 @@ where
 		w.open_with_credentials()?;
 		let parent_key_id = w.parent_key_id();
 
-		let mut validated = false;
-		if refresh_from_node {
-			validated = self.update_outputs(&mut w);
-		}
+		let validated = if refresh_from_node {
+			self.update_outputs(&mut w)
+		} else {
+			false
+		};
 
 		let res = Ok((
 			validated,
@@ -496,10 +498,11 @@ where
 		w.open_with_credentials()?;
 		let parent_key_id = w.parent_key_id();
 
-		let mut validated = false;
-		if refresh_from_node {
-			validated = self.update_outputs(&mut w);
-		}
+		let validated = if refresh_from_node {
+			self.update_outputs(&mut w)
+		} else {
+			false
+		};
 
 		let wallet_info = updater::retrieve_info(&mut *w, &parent_key_id, minimum_confirmations)?;
 		let res = Ok((validated, wallet_info));
@@ -731,7 +734,7 @@ where
 			let mut w = self.wallet.lock();
 			w.w2n_client().clone()
 		};
-		let res = client.post_tx(&TxWrapper { tx_hex: tx_hex }, fluff);
+		let res = client.post_tx(&TxWrapper { tx_hex }, fluff);
 		if let Err(e) = res {
 			error!("api: post_tx: failed with error: {}", e);
 			Err(e)
@@ -794,10 +797,7 @@ where
 	/// Attempt to update outputs in wallet, return whether it was successful
 	fn update_outputs(&self, w: &mut W) -> bool {
 		let parent_key_id = w.parent_key_id();
-		match updater::refresh_outputs(&mut *w, &parent_key_id) {
-			Ok(_) => true,
-			Err(_) => false,
-		}
+		updater::refresh_outputs(&mut *w, &parent_key_id).is_ok()
 	}
 }
 

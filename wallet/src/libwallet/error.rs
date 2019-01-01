@@ -207,13 +207,7 @@ pub enum ErrorKind {
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let show_bt = match env::var("RUST_BACKTRACE") {
-			Ok(r) => {
-				if r == "1" {
-					true
-				} else {
-					false
-				}
-			}
+			Ok(r) => r == "1",
 			Err(_) => false,
 		};
 		let backtrace = match self.backtrace() {
@@ -238,8 +232,8 @@ impl Error {
 	/// get cause string
 	pub fn cause_string(&self) -> String {
 		match self.cause() {
-			Some(k) => format!("{}", k),
-			None => format!("Unknown"),
+			Some(k) => k.to_string(),
+			None => "Unknown".to_string(),
 		}
 	}
 	/// get cause
@@ -262,7 +256,7 @@ impl From<ErrorKind> for Error {
 
 impl From<Context<ErrorKind>> for Error {
 	fn from(inner: Context<ErrorKind>) -> Error {
-		Error { inner: inner }
+		Error { inner }
 	}
 }
 

@@ -36,10 +36,10 @@ pub struct HTTPNodeClient {
 
 impl HTTPNodeClient {
 	/// Create a new client that will communicate with the given grin node
-	pub fn new(node_url: &str, node_api_secret: Option<String>) -> HTTPNodeClient {
+	pub fn new(node_url: String, node_api_secret: Option<String>) -> HTTPNodeClient {
 		HTTPNodeClient {
-			node_url: node_url.to_owned(),
-			node_api_secret: node_api_secret,
+			node_url,
+			node_api_secret,
 		}
 	}
 }

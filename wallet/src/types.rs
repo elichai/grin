@@ -30,7 +30,7 @@ use crate::keychain::{mnemonic, Keychain};
 use crate::util;
 use failure::ResultExt;
 
-pub const SEED_FILE: &'static str = "wallet.seed";
+pub const SEED_FILE: &str = "wallet.seed";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WalletConfig {
@@ -158,7 +158,7 @@ impl WalletSeed {
 			"{}{}{}",
 			wallet_config.data_file_dir, MAIN_SEPARATOR, SEED_FILE,
 		);
-		let _ = WalletSeed::seed_file_exists(wallet_config)?;
+		WalletSeed::seed_file_exists(wallet_config)?;
 		let seed = WalletSeed::from_mnemonic(word_list)?;
 		let enc_seed = EncryptedWalletSeed::from_seed(&seed, password)?;
 		let enc_seed_json = serde_json::to_string_pretty(&enc_seed).context(ErrorKind::Format)?;
@@ -190,7 +190,7 @@ impl WalletSeed {
 		);
 
 		warn!("Generating wallet seed file at: {}", seed_file_path);
-		let _ = WalletSeed::seed_file_exists(wallet_config)?;
+		WalletSeed::seed_file_exists(wallet_config)?;
 
 		let seed = WalletSeed::init_new(seed_length);
 		let enc_seed = EncryptedWalletSeed::from_seed(&seed, password)?;

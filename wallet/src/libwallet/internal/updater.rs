@@ -68,9 +68,8 @@ where
 
 	if let Some(k) = parent_key_id {
 		outputs = outputs
-			.iter()
+			.into_iter()
 			.filter(|o| o.root_key_id == *k)
-			.map(|o| o.clone())
 			.collect();
 	}
 
@@ -111,11 +110,7 @@ where
 		wallet.tx_log_iter().collect::<Vec<_>>()
 	};
 	if let Some(k) = parent_key_id {
-		txs = txs
-			.iter()
-			.filter(|t| t.parent_key_id == *k)
-			.map(|t| t.clone())
-			.collect();
+		txs = txs.into_iter().filter(|t| t.parent_key_id == *k).collect();
 	}
 	txs.sort_by_key(|tx| tx.creation_ts);
 	Ok(txs)
@@ -163,7 +158,7 @@ where
 /// Cancel transaction and associated outputs
 pub fn cancel_tx_and_outputs<T: ?Sized, C, K>(
 	wallet: &mut T,
-	tx: TxLogEntry,
+	mut tx: TxLogEntry,
 	outputs: Vec<OutputData>,
 	parent_key_id: &Identifier,
 ) -> Result<(), libwallet::Error>
@@ -184,7 +179,6 @@ where
 			batch.save(o)?;
 		}
 	}
-	let mut tx = tx.clone();
 	if tx.tx_type == TxLogEntryType::TxSent {
 		tx.tx_type = TxLogEntryType::TxSentCancelled;
 	}
@@ -293,7 +287,7 @@ where
 	// and a list of outputs we want to query the node for
 	let wallet_outputs = map_wallet_outputs(wallet, parent_key_id)?;
 
-	let wallet_output_keys = wallet_outputs.keys().map(|commit| commit.clone()).collect();
+	let wallet_output_keys = wallet_outputs.keys().cloned().collect();
 
 	let api_outputs = wallet
 		.w2n_client()
@@ -433,7 +427,7 @@ where
 	let parent_key_id = wallet.parent_key_id();
 
 	let key_id = match key_id {
-		Some(key_id) => keys::retrieve_existing_key(wallet, key_id)?.0,
+		Some(key_id) => keys::retrieve_existing_key(wallet, &key_id)?.0,
 		None => keys::next_available_key(wallet)?,
 	};
 

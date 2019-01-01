@@ -50,7 +50,7 @@ where
 	C: NodeClient,
 	K: Keychain,
 {
-	f(&mut APIOwner::new(wallet.clone()))?;
+	f(&mut APIOwner::new(wallet))?;
 	Ok(())
 }
 
@@ -63,7 +63,7 @@ where
 	C: NodeClient,
 	K: Keychain,
 {
-	f(&mut APIForeign::new(wallet.clone()))?;
+	f(&mut APIForeign::new(wallet))?;
 	Ok(())
 }
 
@@ -174,17 +174,17 @@ where
 	pub fn retrieve_outputs(
 		&self,
 		req: &Request<Body>,
-		api: APIOwner<T, C, K>,
+		api: &APIOwner<T, C, K>,
 	) -> Result<(bool, Vec<(OutputData, pedersen::Commitment)>), Error> {
 		let mut update_from_node = false;
 		let mut id = None;
 		let mut show_spent = false;
 		let params = parse_params(req);
 
-		if let Some(_) = params.get("refresh") {
+		if params.get("refresh").is_some() {
 			update_from_node = true;
 		}
-		if let Some(_) = params.get("show_spent") {
+		if params.get("show_spent").is_some() {
 			show_spent = true;
 		}
 		if let Some(ids) = params.get("tx_id") {
@@ -198,7 +198,7 @@ where
 	pub fn retrieve_txs(
 		&self,
 		req: &Request<Body>,
-		api: APIOwner<T, C, K>,
+		api: &APIOwner<T, C, K>,
 	) -> Result<(bool, Vec<TxLogEntry>), Error> {
 		let mut tx_id = None;
 		let mut tx_slate_id = None;
@@ -206,7 +206,7 @@ where
 
 		let params = parse_params(req);
 
-		if let Some(_) = params.get("refresh") {
+		if params.get("refresh").is_some() {
 			update_from_node = true;
 		}
 		if let Some(ids) = params.get("id") {
@@ -225,7 +225,7 @@ where
 	pub fn retrieve_stored_tx(
 		&self,
 		req: &Request<Body>,
-		api: APIOwner<T, C, K>,
+		api: &APIOwner<T, C, K>,
 	) -> Result<(bool, Option<Transaction>), Error> {
 		let params = parse_params(req);
 		if let Some(id_string) = params.get("id") {
@@ -258,7 +258,7 @@ where
 	pub fn retrieve_summary_info(
 		&self,
 		req: &Request<Body>,
-		mut api: APIOwner<T, C, K>,
+		api: &mut APIOwner<T, C, K>,
 	) -> Result<(bool, WalletInfo), Error> {
 		let mut minimum_confirmations = 1; // TODO - default needed here
 		let params = parse_params(req);
@@ -276,20 +276,20 @@ where
 	pub fn node_height(
 		&self,
 		_req: &Request<Body>,
-		mut api: APIOwner<T, C, K>,
+		api: &mut APIOwner<T, C, K>,
 	) -> Result<(u64, bool), Error> {
 		api.node_height()
 	}
 
 	fn handle_get_request(&self, req: &Request<Body>) -> Result<Response<Body>, Error> {
-		let api = APIOwner::new(self.wallet.clone());
+		let api = &mut APIOwner::new(self.wallet.clone());
 
 		Ok(
 			match req
 				.uri()
 				.path()
-				.trim_right_matches("/")
-				.rsplit("/")
+				.trim_right_matches('/')
+				.rsplit('/')
 				.next()
 				.unwrap()
 			{
@@ -381,7 +381,7 @@ where
 
 	pub fn cancel_tx(
 		&self,
-		req: Request<Body>,
+		req: &Request<Body>,
 		mut api: APIOwner<T, C, K>,
 	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
 		let params = parse_params(&req);
@@ -458,8 +458,8 @@ where
 		match req
 			.uri()
 			.path()
-			.trim_right_matches("/")
-			.rsplit("/")
+			.trim_right_matches('/')
+			.rsplit('/')
 			.next()
 			.unwrap()
 		{
@@ -472,7 +472,7 @@ where
 					.and_then(|slate| ok(json_response_pretty(&slate))),
 			),
 			"cancel_tx" => Box::new(
-				self.cancel_tx(req, api)
+				self.cancel_tx(&req, api)
 					.and_then(|_| ok(response(StatusCode::OK, ""))),
 			),
 			"post_tx" => Box::new(
@@ -498,20 +498,16 @@ where
 			Ok(r) => Box::new(ok(r)),
 			Err(e) => {
 				error!("Request Error: {:?}", e);
-				Box::new(ok(create_error_response(e)))
+				Box::new(ok(create_error_response(&e)))
 			}
 		}
 	}
 
 	fn post(&self, req: Request<Body>) -> ResponseFuture {
-		Box::new(
-			self.handle_post_request(req)
-				.and_then(|r| ok(r))
-				.or_else(|e| {
-					error!("Request Error: {:?}", e);
-					ok(create_error_response(e))
-				}),
-		)
+		Box::new(self.handle_post_request(req).and_then(ok).or_else(|e| {
+			error!("Request Error: {:?}", e);
+			ok(create_error_response(&e))
+		}))
 	}
 
 	fn options(&self, _req: Request<Body>) -> ResponseFuture {
@@ -585,8 +581,8 @@ where
 		match req
 			.uri()
 			.path()
-			.trim_right_matches("/")
-			.rsplit("/")
+			.trim_right_matches('/')
+			.rsplit('/')
 			.next()
 			.unwrap()
 		{
@@ -609,9 +605,9 @@ where
 	K: Keychain + 'static,
 {
 	fn post(&self, req: Request<Body>) -> ResponseFuture {
-		Box::new(self.handle_request(req).and_then(|r| ok(r)).or_else(|e| {
+		Box::new(self.handle_request(req).and_then(ok).or_else(|e| {
 			error!("Request Error: {:?}", e);
-			ok(create_error_response(e))
+			ok(create_error_response(&e))
 		}))
 	}
 }
@@ -639,12 +635,12 @@ where
 	}
 }
 
-fn create_error_response(e: Error) -> Response<Body> {
+fn create_error_response(e: &Error) -> Response<Body> {
 	Response::builder()
 		.status(StatusCode::INTERNAL_SERVER_ERROR)
 		.header("access-control-allow-origin", "*")
 		.header("access-control-allow-headers", "Content-Type")
-		.body(format!("{}", e).into())
+		.body(e.to_string().into())
 		.unwrap()
 }
 

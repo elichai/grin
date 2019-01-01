@@ -71,7 +71,7 @@ fn api_send(payload: &str) -> Result<Value, Error> {
 		let response: Value =
 			from_str(from_utf8(&output.stdout).expect("Bad output")).expect("Bad output");
 		let err_msg = format!("{}", response["error"]["message"]);
-		if err_msg.len() > 0 && err_msg != "null" {
+		if !err_msg.is_empty() && err_msg != "null" {
 			error!("api_send got error: {}", err_msg);
 		}
 
@@ -95,7 +95,7 @@ fn whoami() -> Result<String, Error> {
 		let response: Value =
 			from_str(from_utf8(&output.stdout).expect("Bad output")).expect("Bad output");
 		let err_msg = format!("{}", response["error"]["message"]);
-		if err_msg.len() > 0 && err_msg != "null" {
+		if !err_msg.is_empty() && err_msg != "null" {
 			error!("status query got error: {}", err_msg);
 		}
 
@@ -255,15 +255,12 @@ fn poll(nseconds: u64, channel: &str) -> Option<Slate> {
 		let unread = read_from_channel(channel, SLATE_SIGNED);
 		for msg in unread.unwrap().iter() {
 			let blob = from_str::<Slate>(msg);
-			match blob {
-				Ok(slate) => {
-					info!(
-						"keybase response message received from @{}, tx uuid: {}",
-						channel, slate.id,
-					);
-					return Some(slate);
-				}
-				Err(_) => (),
+			if let Ok(slate) = blob {
+				info!(
+					"keybase response message received from @{}, tx uuid: {}",
+					channel, slate.id,
+				);
+				return Some(slate);
 			}
 		}
 		sleep(POLL_SLEEP_DURATION);
@@ -283,15 +280,14 @@ impl WalletCommAdapter for KeybaseWalletCommAdapter {
 	// Send a slate to a keybase username then wait for a response for TTL seconds.
 	fn send_tx_sync(&self, addr: &str, slate: &Slate) -> Result<Slate, Error> {
 		// Limit only one recipient
-		if addr.matches(",").count() > 0 {
+		if addr.matches(',').count() > 0 {
 			error!("Only one recipient is supported!");
 			return Err(ErrorKind::GenericError("Tx rejected".to_owned()))?;
 		}
 
 		// Send original slate to recipient with the SLATE_NEW topic
-		match send(slate, addr, SLATE_NEW, TTL) {
-			true => (),
-			false => return Err(ErrorKind::ClientCallback("Posting transaction slate"))?,
+		if !send(slate, addr, SLATE_NEW, TTL) {
+			return Err(ErrorKind::ClientCallback("Posting transaction slate"))?;
 		}
 		info!(
 			"tx request has been sent to @{}, tx uuid: {}",
@@ -299,8 +295,8 @@ impl WalletCommAdapter for KeybaseWalletCommAdapter {
 		);
 		// Wait for response from recipient with SLATE_SIGNED topic
 		match poll(TTL as u64, addr) {
-			Some(slate) => return Ok(slate),
-			None => return Err(ErrorKind::ClientCallback("Receiving reply from recipient"))?,
+			Some(slate) => Ok(slate),
+			None => Err(ErrorKind::ClientCallback("Receiving reply from recipient"))?,
 		}
 	}
 
@@ -324,7 +320,8 @@ impl WalletCommAdapter for KeybaseWalletCommAdapter {
 		account: &str,
 		node_api_secret: Option<String>,
 	) -> Result<(), Error> {
-		let node_client = HTTPNodeClient::new(&config.check_node_api_http_addr, node_api_secret);
+		let node_client =
+			HTTPNodeClient::new(config.check_node_api_http_addr.clone(), node_api_secret);
 		let wallet = instantiate_wallet(config.clone(), node_client, passphrase, account)
 			.context(ErrorKind::WalletSeedDecryption)?;
 
@@ -337,61 +334,59 @@ impl WalletCommAdapter for KeybaseWalletCommAdapter {
 				break;
 			}
 			for (msg, channel) in &unread.unwrap() {
-				let blob = from_str::<Slate>(msg);
-				match blob {
-					Ok(mut slate) => {
-						let tx_uuid = slate.id;
+				if let Ok(mut slate) = from_str::<Slate>(msg) {
+					let tx_uuid = slate.id;
 
-						// Reject multiple recipients channel for safety
-						{
-							if channel.matches(",").count() > 1 {
-								error!(
-									"Incoming tx initiated on channel \"{}\" is rejected, multiple recipients channel! amount: {}(g), tx uuid: {}",
-									channel,
-									slate.amount as f64 / 1000000000.0,
-									tx_uuid,
-								);
-								continue;
-							}
-						}
-
-						info!(
-							"tx initiated on channel \"{}\", to send you {}(g). tx uuid: {}",
-							channel,
-							slate.amount as f64 / 1000000000.0,
-							tx_uuid,
-						);
-						match controller::foreign_single_use(wallet.clone(), |api| {
-							if let Err(e) = api.verify_slate_messages(&slate) {
-								error!("Error validating participant messages: {}", e);
-								return Err(e);
-							}
-							api.receive_tx(&mut slate, None, None)?;
-							Ok(())
-						}) {
-							// Reply to the same channel with topic SLATE_SIGNED
-							Ok(_) => match send(slate, channel, SLATE_SIGNED, TTL) {
-								true => {
-									notify_on_receive(
-										config.keybase_notify_ttl.unwrap_or(1440),
-										channel.to_string(),
-										tx_uuid.to_string(),
-									);
-									debug!("Returned slate to @{} via keybase", channel);
-								}
-								false => {
-									error!("Failed to return slate to @{} via keybase. Incoming tx failed", channel);
-								}
-							},
-							Err(e) => {
-								error!(
-									"Error on receiving tx via keybase: {}. Incoming tx failed",
-									e
-								);
-							}
+					// Reject multiple recipients channel for safety
+					{
+						if channel.matches(',').count() > 1 {
+							error!(
+								"Incoming tx initiated on channel \"{}\" is rejected, multiple recipients channel! amount: {}(g), tx uuid: {}",
+								channel,
+								slate.amount as f64 / 1_000_000_000.0,
+								tx_uuid,
+							);
+							continue;
 						}
 					}
-					Err(_) => (),
+
+					info!(
+						"tx initiated on channel \"{}\", to send you {}(g). tx uuid: {}",
+						channel,
+						slate.amount as f64 / 1_000_000_000.0,
+						tx_uuid,
+					);
+					match controller::foreign_single_use(wallet.clone(), |api| {
+						if let Err(e) = api.verify_slate_messages(&slate) {
+							error!("Error validating participant messages: {}", e);
+							return Err(e);
+						}
+						api.receive_tx(&mut slate, None, None)?;
+						Ok(())
+					}) {
+						// Reply to the same channel with topic SLATE_SIGNED
+						Ok(_) => {
+							if send(slate, channel, SLATE_SIGNED, TTL) {
+								notify_on_receive(
+									config.keybase_notify_ttl.unwrap_or(1440),
+									channel,
+									&tx_uuid.to_string(),
+								);
+								debug!("Returned slate to @{} via keybase", channel);
+							} else {
+								error!(
+									"Failed to return slate to @{} via keybase. Incoming tx failed",
+									channel
+								);
+							}
+						}
+						Err(e) => {
+							error!(
+								"Error on receiving tx via keybase: {}. Incoming tx failed",
+								e
+							);
+						}
+					}
 				}
 			}
 			sleep(LISTEN_SLEEP_DURATION);
@@ -401,11 +396,11 @@ impl WalletCommAdapter for KeybaseWalletCommAdapter {
 }
 
 /// Notify in keybase on receiving a transaction
-fn notify_on_receive(keybase_notify_ttl: u16, channel: String, tx_uuid: String) {
+fn notify_on_receive(keybase_notify_ttl: u16, channel: &str, tx_uuid: &str) {
 	if keybase_notify_ttl > 0 {
 		let my_username = whoami();
 		if let Ok(username) = my_username {
-			let split = channel.split(",");
+			let split = channel.split(',');
 			let vec: Vec<&str> = split.collect();
 			if vec.len() > 1 {
 				let receiver = username;
