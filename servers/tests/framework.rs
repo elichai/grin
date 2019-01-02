@@ -264,7 +264,7 @@ impl LocalServerContainer {
 		let _ = fs::create_dir_all(self.wallet_config.clone().data_file_dir);
 		let r = wallet::WalletSeed::init_file(&self.wallet_config, 32, "");
 
-		let client_n = HTTPNodeClient::new(&self.wallet_config.check_node_api_http_addr, None);
+		let client_n = HTTPNodeClient::new(self.wallet_config.check_node_api_http_addr.clone(), None);
 
 		if let Err(_e) = r {
 			//panic!("Error initializing wallet seed: {}", e);
@@ -308,7 +308,7 @@ impl LocalServerContainer {
 		let keychain: keychain::ExtKeychain = wallet_seed
 			.derive_keychain(false)
 			.expect("Failed to derive keychain from seed file and passphrase.");
-		let client_n = HTTPNodeClient::new(&config.check_node_api_http_addr, None);
+		let client_n = HTTPNodeClient::new(config.check_node_api_http_addr.clone(), None);
 		let mut wallet = LMDBBackend::new(config.clone(), "", client_n)
 			.unwrap_or_else(|e| panic!("Error creating wallet: {:?} Config: {:?}", e, config));
 		wallet.keychain = Some(keychain);
@@ -335,7 +335,7 @@ impl LocalServerContainer {
 			.derive_keychain(false)
 			.expect("Failed to derive keychain from seed file and passphrase.");
 
-		let client_n = HTTPNodeClient::new(&config.check_node_api_http_addr, None);
+		let client_n = HTTPNodeClient::new(config.check_node_api_http_addr.clone(), None);
 		let client_w = HTTPWalletCommAdapter::new();
 
 		let max_outputs = 500;
