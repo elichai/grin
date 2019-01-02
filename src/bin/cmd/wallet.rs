@@ -49,7 +49,7 @@ pub fn wallet_command(wallet_args: &ArgMatches<'_>, config: GlobalWalletConfig) 
 		_ => {}
 	};
 
-	let node_client = HTTPNodeClient::new(&wallet_config.check_node_api_http_addr, None);
+	let node_client = HTTPNodeClient::new(wallet_config.check_node_api_http_addr.clone(), None);
 	let res = wallet_args::wallet_command(wallet_args, wallet_config, node_client);
 
 	// we need to give log output a chance to catch up before exiting

@@ -438,11 +438,11 @@ pub fn wallet_command(
 	let res = match wallet_args.subcommand() {
 		("init", Some(args)) => {
 			let a = arg_parse!(parse_init_args(&wallet_config, &global_wallet_args, &args));
-			command::init(&global_wallet_args, a)
+			command::init(global_wallet_args, a)
 		}
 		("recover", Some(args)) => {
 			let a = arg_parse!(parse_recover_args(&global_wallet_args, &args));
-			command::recover(&wallet_config, a)
+			command::recover(&wallet_config, &a)
 		}
 		("listen", Some(args)) => {
 			let mut c = wallet_config.clone();
@@ -462,22 +462,22 @@ pub fn wallet_command(
 		}
 		("send", Some(args)) => {
 			let a = arg_parse!(parse_send_args(&args));
-			command::send(inst_wallet(), a)
+			command::send(inst_wallet(), &a)
 		}
 		("receive", Some(args)) => {
 			let a = arg_parse!(parse_receive_args(&args));
-			command::receive(inst_wallet(), &global_wallet_args, a)
+			command::receive(inst_wallet(), &global_wallet_args, &a)
 		}
 		("finalize", Some(args)) => {
 			let a = arg_parse!(parse_finalize_args(&args));
-			command::finalize(inst_wallet(), a)
+			command::finalize(inst_wallet(), &a)
 		}
 		("info", Some(args)) => {
 			let a = arg_parse!(parse_info_args(&args));
 			command::info(
 				inst_wallet(),
 				&global_wallet_args,
-				a,
+				&a,
 				wallet_config.dark_background_color_scheme.unwrap_or(true),
 			)
 		}
@@ -491,7 +491,7 @@ pub fn wallet_command(
 			command::txs(
 				inst_wallet(),
 				&global_wallet_args,
-				a,
+				&a,
 				wallet_config.dark_background_color_scheme.unwrap_or(true),
 			)
 		}
@@ -501,7 +501,7 @@ pub fn wallet_command(
 		}
 		("cancel", Some(args)) => {
 			let a = arg_parse!(parse_cancel_args(&args));
-			command::cancel(inst_wallet(), a)
+			command::cancel(inst_wallet(), &a)
 		}
 		("restore", Some(_)) => command::restore(inst_wallet()),
 		("check_repair", Some(_)) => command::check_repair(inst_wallet()),

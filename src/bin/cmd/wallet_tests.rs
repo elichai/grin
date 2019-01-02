@@ -253,7 +253,7 @@ mod wallet_tests {
 		})?;
 
 		let mut bh = 10u64;
-		let _ = test_framework::award_blocks_to_wallet(&chain, wallet1.clone(), bh as usize);
+		let _ = test_framework::award_blocks_to_wallet(&chain, &wallet1, bh as usize);
 
 		// Update info and check
 		let arg_vec = vec!["grin", "wallet", "-p", "password", "-a", "mining", "info"];
@@ -321,7 +321,7 @@ mod wallet_tests {
 			Ok(())
 		})?;
 
-		let _ = test_framework::award_blocks_to_wallet(&chain, wallet1.clone(), 10);
+		let _ = test_framework::award_blocks_to_wallet(&chain, &wallet1, 10);
 		bh += 10;
 
 		// update info for each
