@@ -264,7 +264,8 @@ impl LocalServerContainer {
 		let _ = fs::create_dir_all(self.wallet_config.clone().data_file_dir);
 		let r = wallet::WalletSeed::init_file(&self.wallet_config, 32, "");
 
-		let client_n = HTTPNodeClient::new(self.wallet_config.check_node_api_http_addr.clone(), None);
+		let client_n =
+			HTTPNodeClient::new(self.wallet_config.check_node_api_http_addr.clone(), None);
 
 		if let Err(_e) = r {
 			//panic!("Error initializing wallet seed: {}", e);
