@@ -49,13 +49,7 @@ where
 	// just read the wallet here, no need for a write lock
 	let mut outputs = wallet
 		.iter()
-		.filter(|out| {
-			if show_spent {
-				true
-			} else {
-				out.status != OutputStatus::Spent
-			}
-		})
+		.filter(|out| show_spent || out.status != OutputStatus::Spent)
 		.collect::<Vec<_>>();
 
 	// only include outputs with a given tx_id if provided
@@ -303,12 +297,16 @@ where
 	C: NodeClient,
 	K: Keychain,
 {
-	if height < 500 {
+	if height < 50 {
 		return Ok(());
 	}
 	let mut ids_to_del = vec![];
 	for out in wallet.iter() {
-		if out.status == OutputStatus::Unconfirmed && out.height > 0 && out.height < height - 500 {
+		if out.status == OutputStatus::Unconfirmed
+			&& out.height > 0
+			&& out.height < height - 50
+			&& out.is_coinbase
+		{
 			ids_to_del.push(out.key_id.clone())
 		}
 	}

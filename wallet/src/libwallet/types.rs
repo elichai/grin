@@ -286,7 +286,7 @@ impl OutputData {
 		if self.height > current_height {
 			return 0;
 		}
-		if self.status == OutputStatus::Unconfirmed || self.height == 0 {
+		if self.status == OutputStatus::Unconfirmed {
 			0
 		} else {
 			// if an output has height n and we are at block n
